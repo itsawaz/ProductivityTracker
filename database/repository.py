@@ -392,3 +392,222 @@ class Repository:
             return streaks
         finally:
             conn.close()
+
+    # ─── Insights Queries ────────────────────────────────────────────
+
+    def get_vdi_focus_stats(self, date_str: str) -> dict:
+        """
+        Get VDI focus time vs non-VDI time for a given date.
+        
+        Args:
+            date_str: Date in YYYY-MM-DD format.
+        
+        Returns:
+            Dict with vdi_seconds, non_vdi_seconds, vdi_percentage,
+            and hourly_vdi breakdown.
+        """
+        sql = """
+            SELECT 
+                COALESCE(SUM(CASE WHEN vdi_active = 1 THEN duration ELSE 0 END), 0) as vdi_seconds,
+                COALESCE(SUM(CASE WHEN vdi_active = 0 THEN duration ELSE 0 END), 0) as non_vdi_seconds,
+                COALESCE(SUM(duration), 0) as total_seconds
+            FROM intervals
+            WHERE DATE(timestamp) = %s
+        """
+        hourly_sql = """
+            SELECT 
+                HOUR(timestamp) as hour,
+                COALESCE(SUM(CASE WHEN vdi_active = 1 THEN duration ELSE 0 END), 0) as vdi_seconds,
+                COALESCE(SUM(CASE WHEN vdi_active = 0 THEN duration ELSE 0 END), 0) as non_vdi_seconds
+            FROM intervals
+            WHERE DATE(timestamp) = %s
+            GROUP BY HOUR(timestamp)
+            ORDER BY hour
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(sql, (date_str,))
+            row = cursor.fetchone()
+
+            cursor.execute(hourly_sql, (date_str,))
+            hourly_rows = cursor.fetchall()
+            cursor.close()
+
+            total = int(row["total_seconds"])
+            vdi = int(row["vdi_seconds"])
+            non_vdi = int(row["non_vdi_seconds"])
+
+            hourly_vdi = {}
+            for hr in hourly_rows:
+                hour_key = f"{int(hr['hour']):02d}"
+                hourly_vdi[hour_key] = {
+                    "vdi_seconds": int(hr["vdi_seconds"]),
+                    "non_vdi_seconds": int(hr["non_vdi_seconds"]),
+                }
+
+            return {
+                "vdi_seconds": vdi,
+                "non_vdi_seconds": non_vdi,
+                "total_seconds": total,
+                "vdi_percentage": round((vdi / total * 100) if total > 0 else 0, 1),
+                "hourly_vdi": hourly_vdi,
+            }
+        finally:
+            conn.close()
+
+    def get_input_totals(self, date_str: str) -> dict:
+        """
+        Get aggregated input totals for a given date.
+        
+        Args:
+            date_str: Date in YYYY-MM-DD format.
+        
+        Returns:
+            Dict with total keystrokes, clicks, scrolls, mouse moves,
+            and per-hour breakdown.
+        """
+        sql = """
+            SELECT 
+                COALESCE(SUM(key_count), 0) as total_keys,
+                COALESCE(SUM(mouse_click_count), 0) as total_clicks,
+                COALESCE(SUM(scroll_count), 0) as total_scrolls,
+                COALESCE(SUM(mouse_move_count), 0) as total_mouse_moves,
+                COALESCE(SUM(total_events), 0) as total_events
+            FROM intervals
+            WHERE DATE(timestamp) = %s
+        """
+        hourly_sql = """
+            SELECT 
+                HOUR(timestamp) as `hour`,
+                COALESCE(SUM(key_count), 0) as `keys`,
+                COALESCE(SUM(mouse_click_count), 0) as `clicks`,
+                COALESCE(SUM(scroll_count), 0) as `scrolls`,
+                COALESCE(SUM(mouse_move_count), 0) as `mouse_moves`,
+                COALESCE(SUM(total_events), 0) as `events`
+            FROM intervals
+            WHERE DATE(timestamp) = %s
+            GROUP BY HOUR(timestamp)
+            ORDER BY `hour`
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(sql, (date_str,))
+            row = cursor.fetchone()
+
+            cursor.execute(hourly_sql, (date_str,))
+            hourly_rows = cursor.fetchall()
+            cursor.close()
+
+            hourly_input = {}
+            for hr in hourly_rows:
+                hour_key = f"{int(hr['hour']):02d}"
+                hourly_input[hour_key] = {
+                    "keys": int(hr["keys"]),
+                    "clicks": int(hr["clicks"]),
+                    "scrolls": int(hr["scrolls"]),
+                    "mouse_moves": int(hr["mouse_moves"]),
+                    "events": int(hr["events"]),
+                }
+
+            return {
+                "total_keys": int(row["total_keys"]),
+                "total_clicks": int(row["total_clicks"]),
+                "total_scrolls": int(row["total_scrolls"]),
+                "total_mouse_moves": int(row["total_mouse_moves"]),
+                "total_events": int(row["total_events"]),
+                "hourly_input": hourly_input,
+            }
+        finally:
+            conn.close()
+
+    def get_deep_work_sessions(self, date_str: str) -> dict:
+        """
+        Compute deep work sessions for a given date.
+        
+        A deep work session is a streak of >= 6 consecutive 
+        active or high_focus intervals (>= 3 minutes of sustained focus).
+        
+        Args:
+            date_str: Date in YYYY-MM-DD format.
+        
+        Returns:
+            Dict with session_count, total_duration_minutes, 
+            longest_session_minutes, and sessions list.
+        """
+        sql = """
+            SELECT timestamp, duration, activity_state
+            FROM intervals
+            WHERE DATE(timestamp) = %s
+            ORDER BY timestamp ASC
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(sql, (date_str,))
+            rows = cursor.fetchall()
+            cursor.close()
+
+            sessions = []
+            current_start = None
+            current_len = 0
+            current_duration = 0
+
+            for row in rows:
+                is_deep = row["activity_state"] in ("active", "high_focus")
+                if is_deep:
+                    if current_start is None:
+                        current_start = row["timestamp"]
+                    current_len += 1
+                    current_duration += row["duration"]
+                else:
+                    if current_len >= 6:
+                        sessions.append({
+                            "start_time": (
+                                current_start.isoformat()
+                                if isinstance(current_start, datetime)
+                                else str(current_start)
+                            ),
+                            "end_time": (
+                                row["timestamp"].isoformat()
+                                if isinstance(row["timestamp"], datetime)
+                                else str(row["timestamp"])
+                            ),
+                            "intervals": current_len,
+                            "duration_minutes": round(current_duration / 60, 1),
+                        })
+                    current_start = None
+                    current_len = 0
+                    current_duration = 0
+
+            # Handle streak at end of data
+            if current_len >= 6 and rows:
+                sessions.append({
+                    "start_time": (
+                        current_start.isoformat()
+                        if isinstance(current_start, datetime)
+                        else str(current_start)
+                    ),
+                    "end_time": (
+                        rows[-1]["timestamp"].isoformat()
+                        if isinstance(rows[-1]["timestamp"], datetime)
+                        else str(rows[-1]["timestamp"])
+                    ),
+                    "intervals": current_len,
+                    "duration_minutes": round(current_duration / 60, 1),
+                })
+
+            total_minutes = sum(s["duration_minutes"] for s in sessions)
+            longest = max(
+                (s["duration_minutes"] for s in sessions), default=0
+            )
+
+            return {
+                "session_count": len(sessions),
+                "total_duration_minutes": round(total_minutes, 1),
+                "longest_session_minutes": round(longest, 1),
+                "sessions": sessions,
+            }
+        finally:
+            conn.close()

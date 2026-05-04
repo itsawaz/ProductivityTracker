@@ -120,6 +120,113 @@
 
         </section>
 
+        <!-- ── Insights Grid ──────────────────────────── -->
+        <section class="insights-grid" id="insights-grid">
+
+            <!-- Total Time Worked -->
+            <div class="insight-card" id="insight-total-time">
+                <div class="insight-icon-wrap gradient-blue">
+                    <span class="insight-icon">⏰</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">Total Time Worked</span>
+                    <span class="insight-value" id="insight-total-time-val">0h 00m</span>
+                    <span class="insight-sub" id="insight-total-time-sub">Today's tracked duration</span>
+                </div>
+            </div>
+
+            <!-- VDI Focus Ratio -->
+            <div class="insight-card" id="insight-vdi-ratio">
+                <div class="insight-icon-wrap gradient-purple">
+                    <span class="insight-icon">🖥️</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">VDI Focus Ratio</span>
+                    <div class="insight-progress-wrap">
+                        <div class="insight-progress-bar">
+                            <div class="insight-progress-fill" id="vdi-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <span class="insight-value insight-value-sm" id="insight-vdi-pct">0%</span>
+                    </div>
+                    <span class="insight-sub" id="insight-vdi-sub">0m VDI · 0m total</span>
+                </div>
+            </div>
+
+            <!-- Peak Productivity Hour -->
+            <div class="insight-card" id="insight-peak-hour">
+                <div class="insight-icon-wrap gradient-amber">
+                    <span class="insight-icon">🏆</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">Peak Hour</span>
+                    <span class="insight-value" id="insight-peak-val">—</span>
+                    <span class="insight-sub" id="insight-peak-sub">Most productive hour</span>
+                </div>
+            </div>
+
+            <!-- Deep Work Sessions -->
+            <div class="insight-card" id="insight-deep-work">
+                <div class="insight-icon-wrap gradient-emerald">
+                    <span class="insight-icon">🧠</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">Deep Work</span>
+                    <span class="insight-value" id="insight-deep-val">0 sessions</span>
+                    <span class="insight-sub" id="insight-deep-sub">0 min of sustained focus</span>
+                </div>
+            </div>
+
+            <!-- Idle Time -->
+            <div class="insight-card" id="insight-idle">
+                <div class="insight-icon-wrap gradient-slate">
+                    <span class="insight-icon">💤</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">Idle Time</span>
+                    <div class="insight-progress-wrap">
+                        <div class="insight-progress-bar progress-idle">
+                            <div class="insight-progress-fill fill-idle" id="idle-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <span class="insight-value insight-value-sm" id="insight-idle-pct">0%</span>
+                    </div>
+                    <span class="insight-sub" id="insight-idle-sub">0m idle of 0m total</span>
+                </div>
+            </div>
+
+            <!-- Input Stats -->
+            <div class="insight-card" id="insight-input-stats">
+                <div class="insight-icon-wrap gradient-rose">
+                    <span class="insight-icon">⌨️</span>
+                </div>
+                <div class="insight-content">
+                    <span class="insight-label">Input Activity</span>
+                    <div class="input-stats-grid" id="input-stats-grid">
+                        <div class="input-stat">
+                            <span class="input-stat-icon">⌨️</span>
+                            <span class="input-stat-val" id="input-keys">0</span>
+                            <span class="input-stat-label">Keys</span>
+                        </div>
+                        <div class="input-stat">
+                            <span class="input-stat-icon">🖱️</span>
+                            <span class="input-stat-val" id="input-clicks">0</span>
+                            <span class="input-stat-label">Clicks</span>
+                        </div>
+                        <div class="input-stat">
+                            <span class="input-stat-icon">↕️</span>
+                            <span class="input-stat-val" id="input-scrolls">0</span>
+                            <span class="input-stat-label">Scrolls</span>
+                        </div>
+                        <div class="input-stat">
+                            <span class="input-stat-icon">📏</span>
+                            <span class="input-stat-val" id="input-moves">0</span>
+                            <span class="input-stat-label">Moves</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
         <!-- ── Charts Section ────────────────────────── -->
         <section class="charts-grid">
 
@@ -161,6 +268,40 @@
                 </div>
                 <div class="chart-body">
                     <canvas id="trend-chart"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ── VDI & Input Analysis Charts ────────────── -->
+        <section class="charts-grid">
+
+            <!-- VDI Focus vs Non-VDI -->
+            <div class="chart-card" id="vdi-chart-card">
+                <div class="chart-header">
+                    <h2>VDI Focus vs Non-VDI Time</h2>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-dot" style="background: #3b82f6"></span>VDI Active</span>
+                        <span class="legend-item"><span class="legend-dot" style="background: rgba(148, 163, 184, 0.5)"></span>Non-VDI</span>
+                    </div>
+                </div>
+                <div class="chart-body">
+                    <canvas id="vdi-comparison-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Input Activity Heatmap -->
+            <div class="chart-card" id="heatmap-chart-card">
+                <div class="chart-header">
+                    <h2>Input Activity Heatmap</h2>
+                    <div class="heatmap-legend">
+                        <span class="heatmap-legend-label">Low</span>
+                        <div class="heatmap-gradient-bar"></div>
+                        <span class="heatmap-legend-label">High</span>
+                    </div>
+                </div>
+                <div class="chart-body heatmap-body">
+                    <canvas id="input-heatmap"></canvas>
                 </div>
             </div>
 

@@ -84,7 +84,7 @@ For keyboard/mouse tracking to work on macOS, you must grant Accessibility permi
 python main.py
 ```
 
-The dashboard will automatically open at **http://localhost:5000**
+The dashboard will automatically open at **http://localhost:8080**
 
 ---
 
@@ -92,12 +92,32 @@ The dashboard will automatically open at **http://localhost:5000**
 
 The web dashboard provides:
 
-| Section | Description |
-|---------|-------------|
-| **Live Stats** | Current state, productive hours, efficiency %, focus streak |
-| **Hourly Timeline** | Bar chart showing productivity by hour |
+### Live Stats
+| Card | Description |
+|------|-------------|
+| **Current State** | Real-time activity state (Idle / Passive / Active / High Focus) |
+| **Productive Hours** | Total productive time today |
+| **Efficiency** | Animated gauge showing efficiency percentage |
+| **Focus Streak** | Current & best streak, interruption count |
+
+### Insights
+| Card | Description |
+|------|-------------|
+| **Total Time Worked** | Total tracked duration today |
+| **VDI Focus Ratio** | % of time with VDI in focus vs total, with progress bar |
+| **Peak Hour** | Your most productive hour of the day |
+| **Deep Work** | Count & duration of sustained focus sessions (≥3 min) |
+| **Idle Time** | Total idle time with percentage breakdown |
+| **Input Activity** | Total keystrokes, clicks, scrolls, and mouse moves |
+
+### Charts
+| Chart | Description |
+|-------|-------------|
+| **Hourly Timeline** | Color-coded bar chart showing productivity by hour |
 | **Activity Distribution** | Doughnut chart of time in each state |
 | **Productivity Trend** | Line chart with 7/14/30 day history |
+| **VDI Focus vs Non-VDI** | Stacked bar chart comparing VDI time per hour |
+| **Input Activity Heatmap** | Visual heatmap of input intensity by type and hour |
 | **Recent Intervals** | Timeline of the last 50 intervals |
 
 ---
@@ -165,7 +185,7 @@ Focus Detection → Input Tracking → Interval Aggregator → Classifier
 → Make sure you're using the correct requirements file for your OS and the virtual environment is activated.
 
 ### Dashboard not updating
-→ Check the browser console for WebSocket connection errors. The server must be running on port 5000.
+→ Check the browser console for WebSocket connection errors. The server must be running on port 8080.
 
 ---
 

@@ -11,6 +11,11 @@ IDLE_THRESHOLD = 45             # seconds of no input before marking idle
 FOCUS_POLL_INTERVAL = 1         # seconds between focus detection polls
 MOUSE_SAMPLE_INTERVAL = 0.05   # seconds — throttle raw mouse move events
 
+# VDI Detection Mode:
+#   "visible" — VDI counts as active if running & not hidden (split-screen/multi-monitor)
+#   "strict"  — VDI must be the frontmost (focused) app
+VDI_DETECTION_MODE = "visible"
+
 # =============================================================================
 # VDI Application Identifiers
 # =============================================================================

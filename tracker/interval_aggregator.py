@@ -49,6 +49,7 @@ class IntervalAggregator:
         self._today_productive_seconds = 0.0
         self._today_total_seconds = 0
         self._today_idle_seconds = 0
+        self._today_vdi_seconds = 0
         self._interruptions = 0
         self._last_was_productive = False
 
@@ -61,10 +62,19 @@ class IntervalAggregator:
         self._running = True
         # Load today's existing data from DB
         self._load_today_totals()
+
+        # Main interval processing thread
         self._timer_thread = threading.Thread(
             target=self._run_loop, daemon=True
         )
         self._timer_thread.start()
+
+        # Live status broadcast thread (pushes updates every 5s)
+        self._live_thread = threading.Thread(
+            target=self._live_status_loop, daemon=True
+        )
+        self._live_thread.start()
+
         logger.info(
             f"IntervalAggregator started — {self._interval_duration}s intervals"
         )
@@ -74,6 +84,8 @@ class IntervalAggregator:
         self._running = False
         if self._timer_thread:
             self._timer_thread.join(timeout=5)
+        if hasattr(self, '_live_thread') and self._live_thread:
+            self._live_thread.join(timeout=2)
         self._save_daily_summary()
         logger.info("IntervalAggregator stopped")
 
@@ -87,6 +99,26 @@ class IntervalAggregator:
                 self._process_interval()
             except Exception as e:
                 logger.error(f"Error processing interval: {e}", exc_info=True)
+
+    def _live_status_loop(self):
+        """
+        Broadcast live status every 5 seconds for real-time dashboard updates.
+        
+        This provides near-instant VDI status, current state, and running
+        timer updates between the 30-second interval processing cycles.
+        """
+        while self._running:
+            time.sleep(5)
+            if not self._running:
+                break
+            try:
+                # Update VDI status in real-time
+                self._vdi_active = self._focus_detector.is_vdi_active()
+                
+                if self._emitter:
+                    self._emitter.emit_status_update(self.get_status())
+            except Exception as e:
+                logger.debug(f"Live status emit error: {e}")
 
     def _process_interval(self):
         """Process a single interval — the core aggregation logic."""
@@ -118,6 +150,8 @@ class IntervalAggregator:
         self._today_productive_seconds += productive_seconds
         if state == "idle":
             self._today_idle_seconds += self._interval_duration
+        if vdi_active:
+            self._today_vdi_seconds += self._interval_duration
 
         # Track interruptions (transition from productive → idle)
         is_productive = state in ("active", "high_focus")
@@ -172,6 +206,11 @@ class IntervalAggregator:
             self._today_productive_seconds
         )
 
+        vdi_pct = round(
+            (self._today_vdi_seconds / self._today_total_seconds * 100)
+            if self._today_total_seconds > 0 else 0, 1
+        )
+
         return {
             "current_state": self._current_state,
             "current_weight": self._current_weight,
@@ -180,6 +219,8 @@ class IntervalAggregator:
             "productive_seconds": round(self._today_productive_seconds, 1),
             "total_seconds": self._today_total_seconds,
             "idle_seconds": self._today_idle_seconds,
+            "vdi_seconds": self._today_vdi_seconds,
+            "vdi_percentage": vdi_pct,
             "efficiency": round(efficiency, 1),
             "rolling_score": round(rolling_score, 4),
             "current_streak": self._behavioral.get_current_streak(),
@@ -192,21 +233,32 @@ class IntervalAggregator:
         """Load today's totals from database on startup."""
         try:
             today = datetime.now().strftime("%Y-%m-%d")
+
+            # Load from intervals table (source of truth)
+            totals = self._repository.get_today_totals(today)
+            self._today_total_seconds = totals.get("total_seconds", 0)
+            self._today_productive_seconds = totals.get(
+                "productive_seconds", 0.0
+            )
+            self._today_idle_seconds = totals.get("idle_seconds", 0)
+
+            # Load VDI seconds from intervals
+            try:
+                vdi_stats = self._repository.get_vdi_focus_stats(today)
+                self._today_vdi_seconds = vdi_stats.get("vdi_seconds", 0)
+            except Exception:
+                self._today_vdi_seconds = 0
+
+            # Load interruptions from daily summary if available
             summary = self._repository.get_daily_summary(today)
             if summary:
-                self._today_productive_seconds = summary.get(
-                    "productive_seconds", 0.0
-                )
-                self._today_total_seconds = summary.get(
-                    "total_logged_seconds", 0
-                )
-                self._today_idle_seconds = summary.get("idle_seconds", 0)
                 self._interruptions = summary.get("interruptions", 0)
-                logger.info(
-                    f"Loaded today's totals: "
-                    f"{self._today_productive_seconds:.0f}s productive, "
-                    f"{self._today_total_seconds}s total"
-                )
+
+            logger.info(
+                f"Loaded today's totals: "
+                f"{self._today_productive_seconds:.0f}s productive, "
+                f"{self._today_total_seconds}s total"
+            )
         except Exception as e:
             logger.warning(f"Could not load today's totals: {e}")
 

@@ -31,8 +31,14 @@ def create_app():
     )
     app.config["SECRET_KEY"] = "productivity-tracker-local-secret"
 
-    # Initialize SocketIO
-    socketio.init_app(app, cors_allowed_origins="*", async_mode="threading")
+    # Initialize SocketIO with WebSocket support
+    socketio.init_app(
+        app,
+        cors_allowed_origins="*",
+        async_mode="threading",
+        ping_interval=10,
+        ping_timeout=20,
+    )
 
     # Register routes
     from server.routes import register_routes

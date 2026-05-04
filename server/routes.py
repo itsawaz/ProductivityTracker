@@ -35,6 +35,22 @@ def register_routes(app):
             return jsonify({"error": "Tracker not initialized"}), 503
         return jsonify(_aggregator.get_status())
 
+    @app.route("/api/debug/vdi")
+    def api_debug_vdi():
+        """Debug endpoint: show VDI detection state."""
+        if _aggregator is None:
+            return jsonify({"error": "Tracker not initialized"}), 503
+        try:
+            detector = _aggregator._focus_detector
+            if hasattr(detector, 'get_vdi_app_info'):
+                return jsonify(detector.get_vdi_app_info())
+            return jsonify({
+                "is_vdi_active": detector.is_vdi_active(),
+                "active_app": detector.get_active_app_name(),
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/today")
     def api_today():
         """Get today's summary metrics."""
@@ -140,4 +156,46 @@ def register_routes(app):
             })
         except Exception as e:
             logger.error(f"Error in /api/intervals: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/insights/<date_str>")
+    def api_insights(date_str):
+        """Get comprehensive insights for a specific date."""
+        if _repository is None:
+            return jsonify({"error": "Repository not initialized"}), 503
+
+        try:
+            # VDI Focus Stats
+            vdi_stats = _repository.get_vdi_focus_stats(date_str)
+
+            # Input Totals
+            input_totals = _repository.get_input_totals(date_str)
+
+            # Deep Work Sessions
+            deep_work = _repository.get_deep_work_sessions(date_str)
+
+            # Peak Productivity Hour (from hourly breakdown)
+            hourly = _repository.get_hourly_breakdown(date_str)
+            peak_hour = None
+            peak_weight = 0
+            for hour, info in hourly.items():
+                if info["avg_weight"] > peak_weight:
+                    peak_weight = info["avg_weight"]
+                    peak_hour = hour
+
+            # Today totals
+            totals = _repository.get_today_totals(date_str)
+
+            return jsonify({
+                "date": date_str,
+                "vdi_stats": vdi_stats,
+                "input_totals": input_totals,
+                "deep_work": deep_work,
+                "peak_hour": peak_hour,
+                "peak_weight": round(peak_weight, 4),
+                "totals": totals,
+                "hourly_breakdown": hourly,
+            })
+        except Exception as e:
+            logger.error(f"Error in /api/insights: {e}")
             return jsonify({"error": str(e)}), 500
