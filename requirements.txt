@@ -1,0 +1,5 @@
+pynput>=1.7.6
+mysql-connector-python>=8.0
+flask>=3.0
+flask-socketio>=5.3
+psutil>=5.9
