@@ -15,6 +15,7 @@ let lastKnownTotalSeconds = 0;
 let lastKnownProductiveSeconds = 0;
 let lastStatusTimestamp = 0;
 let lastKnownVdiActive = false;
+let lastKnownState = 'idle';
 
 socket.on('connect', () => {
     isConnected = true;
@@ -173,6 +174,9 @@ function updateStatusCards(status) {
     }
     if (status.vdi_active !== undefined) {
         lastKnownVdiActive = status.vdi_active;
+    }
+    if (status.current_state) {
+        lastKnownState = status.current_state;
     }
 
     // Current State
@@ -420,7 +424,12 @@ function tickLiveTimer() {
 
     const elapsed = Math.floor((Date.now() - lastStatusTimestamp) / 1000);
     const currentTotal = lastKnownTotalSeconds + elapsed;
-    const currentProductive = lastKnownProductiveSeconds + elapsed;
+
+    // Only extrapolate productive time when actually in a productive state
+    const isProductive = (lastKnownState === 'active' || lastKnownState === 'high_focus');
+    const currentProductive = isProductive
+        ? lastKnownProductiveSeconds + elapsed
+        : lastKnownProductiveSeconds;
 
     const totalEl = document.getElementById('total-tracked');
     if (totalEl) {
