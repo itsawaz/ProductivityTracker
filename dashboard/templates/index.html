@@ -3,25 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ProTrack — Real-time productivity tracking dashboard with focus detection, activity classification, and historical analytics.">
+    <meta name="description" content="ProTrack — Your daily productivity command center. Hit 5+ hours of deep work.">
     <title>ProTrack — Productivity Dashboard</title>
-
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <!-- Chart.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-    <!-- Socket.IO -->
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
-
-    <!-- App Styles -->
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <!-- ═══════════════ Header ═══════════════ -->
+    <!-- ═══ Header ═══ -->
     <header class="app-header" id="app-header">
         <div class="header-left">
             <div class="logo">
@@ -29,12 +21,7 @@
                     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
                         <circle cx="14" cy="14" r="12" stroke="url(#logo-grad)" stroke-width="2.5" fill="none"/>
                         <path d="M10 14 L13 17 L18 11" stroke="url(#logo-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <defs>
-                            <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
-                                <stop offset="0%" stop-color="#3b82f6"/>
-                                <stop offset="100%" stop-color="#8b5cf6"/>
-                            </linearGradient>
-                        </defs>
+                        <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
                     </svg>
                 </div>
                 <h1>ProTrack</h1>
@@ -49,191 +36,140 @@
         </div>
     </header>
 
-    <!-- ═══════════════ Main Content ═══════════════ -->
     <main class="dashboard">
 
-        <!-- ── Live Stats Cards ──────────────────────── -->
-        <section class="stats-grid" id="stats-grid">
-
-            <!-- Current State Card -->
-            <div class="stat-card state-card" id="state-card">
-                <div class="stat-card-header">
-                    <span class="stat-icon">🎯</span>
-                    <span class="stat-label">Current State</span>
-                </div>
-                <div class="stat-value">
-                    <span class="state-badge idle" id="state-badge">Idle</span>
-                </div>
-                <div class="stat-meta">
-                    <span id="vdi-status">VDI: —</span>
+        <!-- ═══ Welcome Hero ═══ -->
+        <section class="hero-section" id="hero-section">
+            <div class="hero-left">
+                <span class="hero-wave" id="hero-wave">👋</span>
+                <div class="hero-text">
+                    <h2 class="hero-greeting" id="hero-greeting">Good afternoon!</h2>
+                    <p class="hero-motto" id="hero-motto">Let's crush your 5-hour goal today 🔥</p>
                 </div>
             </div>
-
-            <!-- Productive Hours Card -->
-            <div class="stat-card" id="productive-card">
-                <div class="stat-card-header">
-                    <span class="stat-icon">⏱️</span>
-                    <span class="stat-label">Productive Hours</span>
-                </div>
-                <div class="stat-value">
-                    <span class="stat-number" id="productive-hours">0h 00m</span>
-                </div>
-                <div class="stat-meta">
-                    <span id="total-tracked">Total: 0h 00m tracked</span>
+            <div class="hero-right">
+                <div class="hero-streak-badge" id="hero-streak-badge">
+                    <span class="streak-fire">🔥</span>
+                    <span class="streak-count" id="hero-streak-count">0</span>
+                    <span class="streak-label">streak</span>
                 </div>
             </div>
-
-            <!-- Efficiency Card -->
-            <div class="stat-card" id="efficiency-card">
-                <div class="stat-card-header">
-                    <span class="stat-icon">📊</span>
-                    <span class="stat-label">Efficiency</span>
-                </div>
-                <div class="stat-value efficiency-gauge">
-                    <svg class="gauge-ring" viewBox="0 0 100 100">
-                        <circle class="gauge-bg" cx="50" cy="50" r="40"/>
-                        <circle class="gauge-fill" cx="50" cy="50" r="40" id="gauge-fill"/>
-                    </svg>
-                    <span class="gauge-text" id="efficiency-pct">0%</span>
-                </div>
-                <div class="stat-meta">
-                    <span id="rolling-score">Rolling: 0.00</span>
-                </div>
-            </div>
-
-            <!-- Focus Streak Card -->
-            <div class="stat-card" id="streak-card">
-                <div class="stat-card-header">
-                    <span class="stat-icon">🔥</span>
-                    <span class="stat-label">Focus Streak</span>
-                </div>
-                <div class="stat-value">
-                    <span class="stat-number streak-number" id="current-streak">0</span>
-                    <span class="stat-unit">intervals</span>
-                </div>
-                <div class="stat-meta">
-                    <span id="max-streak">Best today: 0</span>
-                    <span class="separator">·</span>
-                    <span id="interruptions">Interruptions: 0</span>
-                </div>
-            </div>
-
         </section>
 
-        <!-- ── Insights Grid ──────────────────────────── -->
-        <section class="insights-grid" id="insights-grid">
-
-            <!-- Total Time Worked -->
-            <div class="insight-card" id="insight-total-time">
-                <div class="insight-icon-wrap gradient-blue">
-                    <span class="insight-icon">⏰</span>
+        <!-- ═══ Daily Goal Tracker ═══ -->
+        <section class="goal-section" id="goal-section">
+            <div class="goal-ring-card">
+                <div class="goal-ring-wrap">
+                    <svg class="goal-ring" viewBox="0 0 200 200">
+                        <circle class="goal-ring-bg" cx="100" cy="100" r="85"/>
+                        <circle class="goal-ring-fill" cx="100" cy="100" r="85" id="goal-ring-fill"/>
+                        <defs><linearGradient id="goal-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="50%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
+                    </svg>
+                    <div class="goal-ring-center">
+                        <span class="goal-time" id="goal-time">0h 00m</span>
+                        <span class="goal-label">of 5h goal</span>
+                    </div>
                 </div>
-                <div class="insight-content">
-                    <span class="insight-label">Total Time Worked</span>
-                    <span class="insight-value" id="insight-total-time-val">0h 00m</span>
-                    <span class="insight-sub" id="insight-total-time-sub">Today's tracked duration</span>
+                <div class="goal-meta">
+                    <div class="goal-pct-badge" id="goal-pct-badge">0%</div>
+                    <p class="goal-status" id="goal-status">Just getting started — you got this! 💪</p>
                 </div>
             </div>
 
-            <!-- VDI Focus Ratio -->
-            <div class="insight-card" id="insight-vdi-ratio">
-                <div class="insight-icon-wrap gradient-purple">
-                    <span class="insight-icon">🖥️</span>
+            <!-- Quick Stats Row -->
+            <div class="quick-stats">
+                <div class="quick-stat" id="qs-efficiency">
+                    <span class="qs-icon">⚡</span>
+                    <span class="qs-value" id="qs-efficiency-val">0%</span>
+                    <span class="qs-label">Efficiency</span>
                 </div>
+                <div class="quick-stat" id="qs-vdi">
+                    <span class="qs-icon">🖥️</span>
+                    <span class="qs-value" id="qs-vdi-val">—</span>
+                    <span class="qs-label">VDI Status</span>
+                </div>
+                <div class="quick-stat" id="qs-state">
+                    <span class="qs-icon">🎯</span>
+                    <span class="qs-value"><span class="state-badge idle" id="state-badge">Idle</span></span>
+                    <span class="qs-label">Current State</span>
+                </div>
+                <div class="quick-stat" id="qs-streak">
+                    <span class="qs-icon">🔥</span>
+                    <span class="qs-value" id="current-streak">0</span>
+                    <span class="qs-label">Focus Streak</span>
+                </div>
+                <div class="quick-stat" id="qs-total">
+                    <span class="qs-icon">⏰</span>
+                    <span class="qs-value" id="total-tracked">0h 00m</span>
+                    <span class="qs-label">Total Tracked</span>
+                </div>
+                <div class="quick-stat" id="qs-interruptions">
+                    <span class="qs-icon">⚠️</span>
+                    <span class="qs-value" id="interruptions">0</span>
+                    <span class="qs-label">Interruptions</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ Insights Grid ═══ -->
+        <section class="insights-grid" id="insights-grid">
+            <div class="insight-card" id="insight-vdi-ratio">
+                <div class="insight-icon-wrap gradient-purple"><span class="insight-icon">🖥️</span></div>
                 <div class="insight-content">
                     <span class="insight-label">VDI Focus Ratio</span>
                     <div class="insight-progress-wrap">
-                        <div class="insight-progress-bar">
-                            <div class="insight-progress-fill" id="vdi-progress-fill" style="width: 0%"></div>
-                        </div>
+                        <div class="insight-progress-bar"><div class="insight-progress-fill" id="vdi-progress-fill" style="width:0%"></div></div>
                         <span class="insight-value insight-value-sm" id="insight-vdi-pct">0%</span>
                     </div>
                     <span class="insight-sub" id="insight-vdi-sub">0m VDI · 0m total</span>
                 </div>
             </div>
-
-            <!-- Peak Productivity Hour -->
             <div class="insight-card" id="insight-peak-hour">
-                <div class="insight-icon-wrap gradient-amber">
-                    <span class="insight-icon">🏆</span>
-                </div>
+                <div class="insight-icon-wrap gradient-amber"><span class="insight-icon">🏆</span></div>
                 <div class="insight-content">
                     <span class="insight-label">Peak Hour</span>
                     <span class="insight-value" id="insight-peak-val">—</span>
                     <span class="insight-sub" id="insight-peak-sub">Most productive hour</span>
                 </div>
             </div>
-
-            <!-- Deep Work Sessions -->
             <div class="insight-card" id="insight-deep-work">
-                <div class="insight-icon-wrap gradient-emerald">
-                    <span class="insight-icon">🧠</span>
-                </div>
+                <div class="insight-icon-wrap gradient-emerald"><span class="insight-icon">🧠</span></div>
                 <div class="insight-content">
                     <span class="insight-label">Deep Work</span>
                     <span class="insight-value" id="insight-deep-val">0 sessions</span>
                     <span class="insight-sub" id="insight-deep-sub">0 min of sustained focus</span>
                 </div>
             </div>
-
-            <!-- Idle Time -->
             <div class="insight-card" id="insight-idle">
-                <div class="insight-icon-wrap gradient-slate">
-                    <span class="insight-icon">💤</span>
-                </div>
+                <div class="insight-icon-wrap gradient-slate"><span class="insight-icon">💤</span></div>
                 <div class="insight-content">
                     <span class="insight-label">Idle Time</span>
                     <div class="insight-progress-wrap">
-                        <div class="insight-progress-bar progress-idle">
-                            <div class="insight-progress-fill fill-idle" id="idle-progress-fill" style="width: 0%"></div>
-                        </div>
+                        <div class="insight-progress-bar progress-idle"><div class="insight-progress-fill fill-idle" id="idle-progress-fill" style="width:0%"></div></div>
                         <span class="insight-value insight-value-sm" id="insight-idle-pct">0%</span>
                     </div>
                     <span class="insight-sub" id="insight-idle-sub">0m idle of 0m total</span>
                 </div>
             </div>
-
-            <!-- Input Stats -->
-            <div class="insight-card" id="insight-input-stats">
-                <div class="insight-icon-wrap gradient-rose">
-                    <span class="insight-icon">⌨️</span>
-                </div>
+            <div class="insight-card insight-card-wide" id="insight-input-stats">
+                <div class="insight-icon-wrap gradient-rose"><span class="insight-icon">⌨️</span></div>
                 <div class="insight-content">
                     <span class="insight-label">Input Activity</span>
                     <div class="input-stats-grid" id="input-stats-grid">
-                        <div class="input-stat">
-                            <span class="input-stat-icon">⌨️</span>
-                            <span class="input-stat-val" id="input-keys">0</span>
-                            <span class="input-stat-label">Keys</span>
-                        </div>
-                        <div class="input-stat">
-                            <span class="input-stat-icon">🖱️</span>
-                            <span class="input-stat-val" id="input-clicks">0</span>
-                            <span class="input-stat-label">Clicks</span>
-                        </div>
-                        <div class="input-stat">
-                            <span class="input-stat-icon">↕️</span>
-                            <span class="input-stat-val" id="input-scrolls">0</span>
-                            <span class="input-stat-label">Scrolls</span>
-                        </div>
-                        <div class="input-stat">
-                            <span class="input-stat-icon">📏</span>
-                            <span class="input-stat-val" id="input-moves">0</span>
-                            <span class="input-stat-label">Moves</span>
-                        </div>
+                        <div class="input-stat"><span class="input-stat-icon">⌨️</span><span class="input-stat-val" id="input-keys">0</span><span class="input-stat-label">Keys</span></div>
+                        <div class="input-stat"><span class="input-stat-icon">🖱️</span><span class="input-stat-val" id="input-clicks">0</span><span class="input-stat-label">Clicks</span></div>
+                        <div class="input-stat"><span class="input-stat-icon">↕️</span><span class="input-stat-val" id="input-scrolls">0</span><span class="input-stat-label">Scrolls</span></div>
+                        <div class="input-stat"><span class="input-stat-icon">📏</span><span class="input-stat-val" id="input-moves">0</span><span class="input-stat-label">Moves</span></div>
                     </div>
                 </div>
             </div>
-
         </section>
 
-        <!-- ── Charts Section ────────────────────────── -->
+        <!-- ═══ Charts ═══ -->
         <section class="charts-grid">
-
-            <!-- Hourly Timeline Chart -->
             <div class="chart-card chart-wide" id="hourly-chart-card">
                 <div class="chart-header">
-                    <h2>Hourly Productivity Timeline</h2>
+                    <h2>⏰ Hourly Productivity</h2>
                     <div class="chart-legend">
                         <span class="legend-item"><span class="legend-dot idle"></span>Idle</span>
                         <span class="legend-item"><span class="legend-dot passive"></span>Passive</span>
@@ -241,97 +177,80 @@
                         <span class="legend-item"><span class="legend-dot high-focus"></span>High Focus</span>
                     </div>
                 </div>
-                <div class="chart-body">
-                    <canvas id="hourly-chart"></canvas>
-                </div>
+                <div class="chart-body"><canvas id="hourly-chart"></canvas></div>
             </div>
-
-            <!-- Activity Distribution Chart -->
             <div class="chart-card" id="distribution-chart-card">
-                <div class="chart-header">
-                    <h2>Activity Distribution</h2>
-                </div>
-                <div class="chart-body chart-body-doughnut">
-                    <canvas id="distribution-chart"></canvas>
-                </div>
+                <div class="chart-header"><h2>🍩 Activity Mix</h2></div>
+                <div class="chart-body chart-body-doughnut"><canvas id="distribution-chart"></canvas></div>
             </div>
-
-            <!-- Productivity Trend Chart -->
             <div class="chart-card" id="trend-chart-card">
                 <div class="chart-header">
-                    <h2>Productivity Trend</h2>
+                    <h2>📈 Productivity Trend</h2>
                     <div class="chart-controls">
                         <button class="trend-btn active" data-days="7">7D</button>
                         <button class="trend-btn" data-days="14">14D</button>
                         <button class="trend-btn" data-days="30">30D</button>
                     </div>
                 </div>
-                <div class="chart-body">
-                    <canvas id="trend-chart"></canvas>
-                </div>
+                <div class="chart-body"><canvas id="trend-chart"></canvas></div>
             </div>
-
         </section>
 
-        <!-- ── VDI & Input Analysis Charts ────────────── -->
         <section class="charts-grid">
-
-            <!-- VDI Focus vs Non-VDI -->
             <div class="chart-card" id="vdi-chart-card">
                 <div class="chart-header">
-                    <h2>VDI Focus vs Non-VDI Time</h2>
+                    <h2>🖥️ VDI vs Non-VDI</h2>
                     <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-dot" style="background: #3b82f6"></span>VDI Active</span>
-                        <span class="legend-item"><span class="legend-dot" style="background: rgba(148, 163, 184, 0.5)"></span>Non-VDI</span>
+                        <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>VDI</span>
+                        <span class="legend-item"><span class="legend-dot" style="background:rgba(148,163,184,0.5)"></span>Other</span>
                     </div>
                 </div>
-                <div class="chart-body">
-                    <canvas id="vdi-comparison-chart"></canvas>
-                </div>
+                <div class="chart-body"><canvas id="vdi-comparison-chart"></canvas></div>
             </div>
-
-            <!-- Input Activity Heatmap -->
             <div class="chart-card" id="heatmap-chart-card">
                 <div class="chart-header">
-                    <h2>Input Activity Heatmap</h2>
+                    <h2>🌡️ Input Heatmap</h2>
                     <div class="heatmap-legend">
                         <span class="heatmap-legend-label">Low</span>
                         <div class="heatmap-gradient-bar"></div>
                         <span class="heatmap-legend-label">High</span>
                     </div>
                 </div>
-                <div class="chart-body heatmap-body">
-                    <canvas id="input-heatmap"></canvas>
-                </div>
+                <div class="chart-body heatmap-body"><canvas id="input-heatmap"></canvas></div>
             </div>
-
         </section>
 
-        <!-- ── Recent Activity Timeline ──────────────── -->
+        <!-- ═══ Timeline ═══ -->
         <section class="timeline-section">
             <div class="chart-card chart-full">
                 <div class="chart-header">
-                    <h2>Recent Intervals</h2>
+                    <h2>📋 Recent Activity</h2>
                     <span class="timeline-count" id="timeline-count">0 intervals</span>
                 </div>
                 <div class="timeline-body" id="timeline-body">
                     <div class="timeline-empty">
                         <span class="empty-icon">📡</span>
                         <p>Waiting for data...</p>
-                        <p class="empty-sub">Intervals will appear here every 30 seconds</p>
+                        <p class="empty-sub">Intervals appear every 30 seconds</p>
                     </div>
                 </div>
             </div>
         </section>
-
     </main>
 
-    <!-- ═══════════════ Footer ═══════════════ -->
     <footer class="app-footer">
-        <p>ProTrack — Local Productivity Tracker · All data stays on your machine</p>
+        <p>ProTrack — Local Productivity Tracker · All data stays on your machine 🔒</p>
     </footer>
 
-    <!-- App Scripts -->
+    <!-- Hidden elements for status updates -->
+    <span id="productive-hours" style="display:none">0h 00m</span>
+    <span id="vdi-status" style="display:none">—</span>
+    <span id="max-streak" style="display:none">0</span>
+    <span id="rolling-score" style="display:none">0.00</span>
+    <span id="efficiency-pct" style="display:none">0</span>
+    <span id="insight-total-time-val" style="display:none">0h 00m</span>
+    <span id="insight-total-time-sub" style="display:none"></span>
+
     <script src="/static/js/charts.js"></script>
     <script src="/static/js/app.js"></script>
 </body>

@@ -143,12 +143,16 @@ function createDistributionChart(canvasId) {
     return distributionChart;
 }
 
-function updateDistributionChart(intervals) {
+function updateDistributionChart(hourlyData) {
     if (!distributionChart) return;
     const counts = { idle: 0, passive: 0, active: 0, high_focus: 0 };
-    for (const iv of intervals) {
-        const state = iv.activity_state || 'idle';
-        if (counts[state] !== undefined) counts[state]++;
+    for (const [hour, info] of Object.entries(hourlyData)) {
+        const weight = info.avg_weight || 0;
+        const intervalCount = info.interval_count || 1;
+        if (weight >= 0.8) counts.high_focus += intervalCount;
+        else if (weight >= 0.5) counts.active += intervalCount;
+        else if (weight > 0) counts.passive += intervalCount;
+        else counts.idle += intervalCount;
     }
     distributionChart.data.datasets[0].data = [counts.idle, counts.passive, counts.active, counts.high_focus];
     distributionChart.update();

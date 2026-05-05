@@ -1,20 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   ProTrack — Dashboard Application Logic
+   ProTrack — Dashboard Application Logic (Gen Z Edition)
    ═══════════════════════════════════════════════════════════════════════ */
 
-// ── Socket.IO Connection (prefer WebSocket) ──────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────
+const DAILY_GOAL_HOURS = 5;
+const DAILY_GOAL_SECONDS = DAILY_GOAL_HOURS * 3600;
+
+// ── Socket.IO Connection ──────────────────────────────────────────────
 const socket = io({
-    transports: ['websocket', 'polling'],
-    upgrade: true,
+    transports: ['polling'],
 });
 let isConnected = false;
 let lastKnownTotalSeconds = 0;
+let lastKnownProductiveSeconds = 0;
 let lastStatusTimestamp = 0;
 let lastKnownVdiActive = false;
 
 socket.on('connect', () => {
     isConnected = true;
-    console.log('✅ Connected to ProTrack server via', socket.io.engine.transport.name);
+    console.log('✅ Connected to ProTrack server');
     updateConnectionStatus(true);
 });
 
@@ -24,37 +28,34 @@ socket.on('disconnect', () => {
     updateConnectionStatus(false);
 });
 
-// ── Initialize Charts ─────────────────────────────────────────────────
+// ── Initialize ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    // Create charts
     createHourlyChart('hourly-chart');
     createDistributionChart('distribution-chart');
     createTrendChart('trend-chart');
     createVdiComparisonChart('vdi-comparison-chart');
     createInputHeatmap('input-heatmap');
 
-    // Add SVG gradient for gauge
     injectGaugeGradient();
-
-    // Start clock + live timer
+    updateGreeting();
     updateClock();
     setInterval(updateClock, 1000);
     setInterval(tickLiveTimer, 1000);
 
-    // Initial data fetch
     fetchTodayData();
     fetchTrendData(7);
     fetchIntervals();
     fetchInsights();
 
-    // Periodic heavy refresh (charts + intervals every 30s)
     setInterval(() => {
         fetchTodayData();
         fetchIntervals();
         fetchInsights();
     }, 30000);
 
-    // Trend button handlers
+    // Update greeting every minute
+    setInterval(updateGreeting, 60000);
+
     document.querySelectorAll('.trend-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
@@ -64,9 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// ── Real-Time Event Handlers ──────────────────────────────────────────
+// ── Real-Time Events ──────────────────────────────────────────────────
 socket.on('interval_update', (data) => {
-    console.log('📊 Interval update:', data);
     if (data.status) updateStatusCards(data.status);
     if (data.interval) prependTimelineItem(data.interval);
     fetchTodayData();
@@ -75,17 +75,46 @@ socket.on('interval_update', (data) => {
 });
 
 socket.on('status_update', (data) => {
-    // Live status pushed every 5 seconds from the server
     updateStatusCards(data);
 });
 
-// ── API Fetchers ──────────────────────────────────────────────────────
+// ── Greeting & Motivation ─────────────────────────────────────────────
+function updateGreeting() {
+    const hour = new Date().getHours();
+    let greeting, emoji;
+    if (hour < 6) { greeting = 'Night owl mode'; emoji = '🦉'; }
+    else if (hour < 12) { greeting = 'Good morning'; emoji = '☀️'; }
+    else if (hour < 17) { greeting = 'Good afternoon'; emoji = '🚀'; }
+    else if (hour < 21) { greeting = 'Good evening'; emoji = '🌆'; }
+    else { greeting = 'Burning midnight oil'; emoji = '🌙'; }
+
+    const el = document.getElementById('hero-greeting');
+    const wave = document.getElementById('hero-wave');
+    if (el) el.textContent = `${greeting}!`;
+    if (wave) wave.textContent = emoji;
+}
+
+function getGoalMessage(pct) {
+    if (pct >= 100) return "YOU DID IT! 5 hours smashed! 🏆🎉";
+    if (pct >= 80) return "Almost there — push through! 💎";
+    if (pct >= 60) return "Over halfway! You're cooking 🔥";
+    if (pct >= 40) return "Great momentum — keep it locked in 💪";
+    if (pct >= 20) return "Building up steam — let's gooo 🚂";
+    if (pct > 0) return "You've started — that's the hardest part ✨";
+    return "Let's crush your 5-hour goal today 🔥";
+}
+
+// ── Data Fetchers ─────────────────────────────────────────────────────
 async function fetchTodayData() {
     try {
         const res = await fetch('/api/today');
         const data = await res.json();
+
         updateStatusCards(data);
-        if (data.hourly_breakdown) updateHourlyChart(data.hourly_breakdown);
+        if (data.hourly_breakdown) {
+            updateHourlyChart(data.hourly_breakdown);
+            updateDistributionChart(data.hourly_breakdown);
+        }
     } catch (e) {
         console.error('Error fetching today data:', e);
     }
@@ -93,8 +122,8 @@ async function fetchTodayData() {
 
 async function fetchTrendData(days) {
     try {
-        const end = new Date().toISOString().slice(0, 10);
-        const start = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+        const end = new Date().toISOString().split('T')[0];
+        const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
         const res = await fetch(`/api/daily?start=${start}&end=${end}`);
         const data = await res.json();
         if (data.summaries) updateTrendChart(data.summaries);
@@ -105,13 +134,10 @@ async function fetchTrendData(days) {
 
 async function fetchIntervals() {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = new Date().toISOString().split('T')[0];
         const res = await fetch(`/api/intervals?date=${today}&limit=50`);
         const data = await res.json();
-        if (data.intervals) {
-            updateTimeline(data.intervals);
-            updateDistributionChart(data.intervals);
-        }
+        if (data.intervals) updateTimeline(data.intervals);
     } catch (e) {
         console.error('Error fetching intervals:', e);
     }
@@ -119,10 +145,9 @@ async function fetchIntervals() {
 
 async function fetchInsights() {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = new Date().toISOString().split('T')[0];
         const res = await fetch(`/api/insights/${today}`);
         const data = await res.json();
-        if (data.error) return;
         updateInsightCards(data);
         if (data.vdi_stats && data.vdi_stats.hourly_vdi) {
             updateVdiComparisonChart(data.vdi_stats.hourly_vdi);
@@ -138,10 +163,13 @@ async function fetchInsights() {
 // ── UI Updaters ───────────────────────────────────────────────────────
 
 function updateStatusCards(status) {
-    // Track the last known total for the live timer
+    // Track for live timer
     if (status.total_seconds !== undefined) {
         lastKnownTotalSeconds = status.total_seconds;
         lastStatusTimestamp = Date.now();
+    }
+    if (status.productive_seconds !== undefined) {
+        lastKnownProductiveSeconds = status.productive_seconds;
     }
     if (status.vdi_active !== undefined) {
         lastKnownVdiActive = status.vdi_active;
@@ -155,89 +183,103 @@ function updateStatusCards(status) {
     }
 
     // VDI Status
-    const vdiEl = document.getElementById('vdi-status');
-    if (vdiEl) vdiEl.textContent = `VDI: ${status.vdi_active ? '✅ Active' : '⚪ Inactive'}`;
-
-    // Productive Hours
-    const prodEl = document.getElementById('productive-hours');
-    if (prodEl && status.productive_hours) prodEl.textContent = status.productive_hours;
-
-    // Total Tracked
-    const totalEl = document.getElementById('total-tracked');
-    if (totalEl && status.total_seconds !== undefined) {
-        const hrs = Math.floor(status.total_seconds / 3600);
-        const mins = Math.floor((status.total_seconds % 3600) / 60);
-        totalEl.textContent = `Total: ${hrs}h ${mins.toString().padStart(2, '0')}m tracked`;
-    }
+    const vdiEl = document.getElementById('qs-vdi-val');
+    if (vdiEl) vdiEl.textContent = status.vdi_active ? '✅ Active' : '⚪ Off';
 
     // Efficiency
-    const effEl = document.getElementById('efficiency-pct');
+    const effEl = document.getElementById('qs-efficiency-val');
     if (effEl && status.efficiency !== undefined) effEl.textContent = `${Math.round(status.efficiency)}%`;
-    updateGauge(status.efficiency || 0);
 
-    // Rolling Score
-    const rollEl = document.getElementById('rolling-score');
-    if (rollEl && status.rolling_score !== undefined) rollEl.textContent = `Rolling: ${status.rolling_score.toFixed(2)}`;
-
-    // Focus Streak
+    // Streak
     const streakEl = document.getElementById('current-streak');
     if (streakEl && status.current_streak !== undefined) streakEl.textContent = status.current_streak;
+    const heroStreak = document.getElementById('hero-streak-count');
+    if (heroStreak && status.max_streak !== undefined) heroStreak.textContent = status.max_streak;
 
-    const maxEl = document.getElementById('max-streak');
-    if (maxEl && status.max_streak !== undefined) maxEl.textContent = `Best today: ${status.max_streak}`;
-
+    // Interruptions
     const intEl = document.getElementById('interruptions');
-    if (intEl && status.interruptions !== undefined) intEl.textContent = `Interruptions: ${status.interruptions}`;
+    if (intEl && status.interruptions !== undefined) intEl.textContent = status.interruptions;
 
-    // Also update the total-time insight card from real-time status
+    // Total Tracked
     if (status.total_seconds !== undefined) {
-        const ttEl = document.getElementById('insight-total-time-val');
-        if (ttEl) ttEl.textContent = formatDuration(status.total_seconds);
+        const totalEl = document.getElementById('total-tracked');
+        if (totalEl) totalEl.textContent = formatDuration(status.total_seconds);
     }
-    if (status.vdi_percentage !== undefined) {
-        const vpEl = document.getElementById('insight-vdi-pct');
-        const vpFill = document.getElementById('vdi-progress-fill');
-        if (vpEl) vpEl.textContent = `${Math.round(status.vdi_percentage)}%`;
-        if (vpFill) vpFill.style.width = `${Math.min(status.vdi_percentage, 100)}%`;
+
+    // Hidden elements (backward compat)
+    const prodEl = document.getElementById('productive-hours');
+    if (prodEl && status.productive_hours) prodEl.textContent = status.productive_hours;
+    const vdiStatus = document.getElementById('vdi-status');
+    if (vdiStatus) vdiStatus.textContent = status.vdi_active ? '✅ Active' : '⚪ Inactive';
+    const effPct = document.getElementById('efficiency-pct');
+    if (effPct && status.efficiency !== undefined) effPct.textContent = `${Math.round(status.efficiency)}%`;
+    const rollEl = document.getElementById('rolling-score');
+    if (rollEl && status.rolling_score !== undefined) rollEl.textContent = status.rolling_score.toFixed(2);
+    const maxStreak = document.getElementById('max-streak');
+    if (maxStreak && status.max_streak !== undefined) maxStreak.textContent = status.max_streak;
+
+    // Update the 5-hour goal ring
+    updateGoalRing(status.productive_seconds || lastKnownProductiveSeconds);
+}
+
+function updateGoalRing(productiveSeconds) {
+    const pct = Math.min((productiveSeconds / DAILY_GOAL_SECONDS) * 100, 100);
+    const circumference = 2 * Math.PI * 85; // r=85
+
+    // Ring fill
+    const ring = document.getElementById('goal-ring-fill');
+    if (ring) {
+        const offset = circumference - (pct / 100) * circumference;
+        ring.style.strokeDashoffset = offset;
     }
-    if (status.idle_seconds !== undefined && status.total_seconds) {
-        const idlePct = status.total_seconds > 0 ? (status.idle_seconds / status.total_seconds * 100) : 0;
-        const ipEl = document.getElementById('insight-idle-pct');
-        const ipFill = document.getElementById('idle-progress-fill');
-        if (ipEl) ipEl.textContent = `${Math.round(idlePct)}%`;
-        if (ipFill) ipFill.style.width = `${Math.min(idlePct, 100)}%`;
-        const iSub = document.getElementById('insight-idle-sub');
-        if (iSub) iSub.textContent = `${formatDurationShort(status.idle_seconds)} idle of ${formatDurationShort(status.total_seconds)} total`;
+
+    // Time display
+    const timeEl = document.getElementById('goal-time');
+    if (timeEl) timeEl.textContent = formatDuration(productiveSeconds);
+
+    // Hidden element
+    const ttEl = document.getElementById('insight-total-time-val');
+    if (ttEl) ttEl.textContent = formatDuration(productiveSeconds);
+
+    // Percentage badge
+    const badge = document.getElementById('goal-pct-badge');
+    if (badge) {
+        badge.textContent = `${Math.round(pct)}%`;
+        badge.className = 'goal-pct-badge';
+        if (pct >= 100) badge.classList.add('done');
+        else if (pct >= 60) badge.classList.add('hot');
+    }
+
+    // Motivational status
+    const statusEl = document.getElementById('goal-status');
+    if (statusEl) statusEl.textContent = getGoalMessage(pct);
+
+    // Update motto
+    const mottoEl = document.getElementById('hero-motto');
+    if (mottoEl) {
+        if (pct >= 100) mottoEl.textContent = "5-hour goal achieved! You're a legend 👑";
+        else if (pct >= 60) mottoEl.textContent = "You're on fire — don't stop now 🔥";
+        else mottoEl.textContent = getGoalMessage(pct);
     }
 }
 
 function updateInsightCards(data) {
-    // Total Time Worked
-    if (data.totals) {
-        const ttEl = document.getElementById('insight-total-time-val');
-        if (ttEl) ttEl.textContent = formatDuration(data.totals.total_seconds);
-        const ttSub = document.getElementById('insight-total-time-sub');
-        if (ttSub) {
-            const prodHrs = formatDurationShort(data.totals.productive_seconds);
-            ttSub.textContent = `${prodHrs} productive`;
-        }
-    }
-
     // VDI Focus Ratio
     if (data.vdi_stats) {
-        const vs = data.vdi_stats;
-        const vpEl = document.getElementById('insight-vdi-pct');
-        const vpFill = document.getElementById('vdi-progress-fill');
-        if (vpEl) vpEl.textContent = `${Math.round(vs.vdi_percentage)}%`;
-        if (vpFill) vpFill.style.width = `${Math.min(vs.vdi_percentage, 100)}%`;
-        const vSub = document.getElementById('insight-vdi-sub');
-        if (vSub) vSub.textContent = `${formatDurationShort(vs.vdi_seconds)} VDI · ${formatDurationShort(vs.total_seconds)} total`;
+        const v = data.vdi_stats;
+        const pct = v.vdi_percentage || 0;
+        const fill = document.getElementById('vdi-progress-fill');
+        const pctEl = document.getElementById('insight-vdi-pct');
+        if (fill) fill.style.width = `${Math.min(pct, 100)}%`;
+        if (pctEl) pctEl.textContent = `${Math.round(pct)}%`;
+        const sub = document.getElementById('insight-vdi-sub');
+        if (sub) sub.textContent = `${formatDurationShort(v.vdi_seconds)} VDI · ${formatDurationShort(v.total_seconds)} total`;
     }
 
     // Peak Hour
-    if (data.peak_hour !== null && data.peak_hour !== undefined) {
-        const phEl = document.getElementById('insight-peak-val');
+    if (data.peak_hour && data.peak_weight > 0) {
         const h = parseInt(data.peak_hour, 10);
+        const phEl = document.getElementById('insight-peak-val');
         if (phEl) phEl.textContent = `${h.toString().padStart(2, '0')}:00 – ${(h + 1).toString().padStart(2, '0')}:00`;
         const phSub = document.getElementById('insight-peak-sub');
         if (phSub) phSub.textContent = `Score: ${(data.peak_weight * 100).toFixed(0)}% productivity`;
@@ -246,7 +288,7 @@ function updateInsightCards(data) {
         if (phEl) phEl.textContent = '—';
     }
 
-    // Deep Work Sessions
+    // Deep Work
     if (data.deep_work) {
         const dw = data.deep_work;
         const dwEl = document.getElementById('insight-deep-val');
@@ -283,43 +325,54 @@ function updateInsightCards(data) {
     }
 }
 
-function updateGauge(efficiency) {
-    const gaugeFill = document.getElementById('gauge-fill');
-    if (!gaugeFill) return;
-    const circumference = 2 * Math.PI * 40;
-    const pct = Math.min(efficiency, 100) / 100;
-    const offset = circumference * (1 - pct);
-    gaugeFill.style.strokeDasharray = circumference;
-    gaugeFill.style.strokeDashoffset = offset;
+// ── Connection Status ─────────────────────────────────────────────────
+function updateConnectionStatus(connected) {
+    const el = document.getElementById('tracking-status');
+    if (!el) return;
+    if (connected) {
+        el.className = 'tracking-status';
+        el.innerHTML = '<span class="status-dot"></span><span class="status-text">Tracking Active</span>';
+    } else {
+        el.className = 'tracking-status disconnected';
+        el.innerHTML = '<span class="status-dot"></span><span class="status-text">Disconnected</span>';
+    }
 }
 
+// ── Clock ─────────────────────────────────────────────────────────────
+function updateClock() {
+    const el = document.getElementById('header-datetime');
+    if (el) {
+        const now = new Date();
+        el.textContent = now.toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric',
+        }) + ' · ' + now.toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        });
+    }
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────
 function updateTimeline(intervals) {
     const body = document.getElementById('timeline-body');
-    const count = document.getElementById('timeline-count');
+    const countEl = document.getElementById('timeline-count');
     if (!body) return;
-    if (intervals.length === 0) {
-        body.innerHTML = `
-            <div class="timeline-empty">
-                <span class="empty-icon">📡</span>
-                <p>Waiting for data...</p>
-                <p class="empty-sub">Intervals will appear here every 30 seconds</p>
-            </div>`;
-        if (count) count.textContent = '0 intervals';
+
+    if (!intervals || intervals.length === 0) {
+        body.innerHTML = '<div class="timeline-empty"><span class="empty-icon">📡</span><p>Waiting for data...</p><p class="empty-sub">Intervals appear every 30 seconds</p></div>';
+        if (countEl) countEl.textContent = '0 intervals';
         return;
     }
+
+    if (countEl) countEl.textContent = `${intervals.length} interval${intervals.length !== 1 ? 's' : ''}`;
     body.innerHTML = intervals.map(iv => createTimelineHTML(iv)).join('');
-    if (count) count.textContent = `${intervals.length} intervals`;
 }
 
 function prependTimelineItem(interval) {
     const body = document.getElementById('timeline-body');
     if (!body) return;
     const empty = body.querySelector('.timeline-empty');
-    if (empty) body.innerHTML = '';
+    if (empty) empty.remove();
     body.insertAdjacentHTML('afterbegin', createTimelineHTML(interval));
-    while (body.children.length > 50) body.removeChild(body.lastChild);
-    const count = document.getElementById('timeline-count');
-    if (count) count.textContent = `${body.children.length} intervals`;
 }
 
 function createTimelineHTML(iv) {
@@ -355,43 +408,33 @@ function createTimelineHTML(iv) {
         </div>`;
 }
 
-// ── Live Timer (ticks every 1 second) ─────────────────────────────────
-
+// ── Live Timer ────────────────────────────────────────────────────────
 function tickLiveTimer() {
     if (lastKnownTotalSeconds <= 0 || lastStatusTimestamp <= 0) return;
 
-    // Only tick the timer when VDI is active
     if (!lastKnownVdiActive) {
-        // Show paused state
         const totalEl = document.getElementById('total-tracked');
-        if (totalEl) {
-            const hrs = Math.floor(lastKnownTotalSeconds / 3600);
-            const mins = Math.floor((lastKnownTotalSeconds % 3600) / 60);
-            totalEl.textContent = `Total: ${hrs}h ${mins.toString().padStart(2, '0')}m (paused)`;
-        }
+        if (totalEl) totalEl.textContent = formatDuration(lastKnownTotalSeconds) + ' ⏸️';
         return;
     }
 
-    // Calculate elapsed since last server status push
     const elapsed = Math.floor((Date.now() - lastStatusTimestamp) / 1000);
     const currentTotal = lastKnownTotalSeconds + elapsed;
+    const currentProductive = lastKnownProductiveSeconds + elapsed;
 
-    // Update "Total Time Worked" insight card
-    const ttEl = document.getElementById('insight-total-time-val');
-    if (ttEl) ttEl.textContent = formatDuration(currentTotal);
-
-    // Update "Total: Xh Ym tracked" in stats card
     const totalEl = document.getElementById('total-tracked');
     if (totalEl) {
         const hrs = Math.floor(currentTotal / 3600);
         const mins = Math.floor((currentTotal % 3600) / 60);
         const secs = currentTotal % 60;
-        totalEl.textContent = `Total: ${hrs}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+        totalEl.textContent = `${hrs}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
     }
+
+    // Live goal ring update
+    updateGoalRing(currentProductive);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
-
 function formatState(state) {
     const names = { 'idle': 'Idle', 'passive': 'Passive', 'active': 'Active', 'high_focus': 'High Focus' };
     return names[state] || state;
@@ -412,53 +455,17 @@ function formatDurationShort(seconds) {
     return `${Math.floor(seconds / 60)}m`;
 }
 
-function setAnimatedValue(elementId, value) {
-    const el = document.getElementById(elementId);
+function setAnimatedValue(id, value) {
+    const el = document.getElementById(id);
     if (!el) return;
-    const display = value > 9999 ? `${(value / 1000).toFixed(1)}k` : value.toLocaleString();
-    el.textContent = display;
-}
-
-function updateClock() {
-    const el = document.getElementById('header-datetime');
-    if (!el) return;
-    el.textContent = new Date().toLocaleString('en-US', {
-        weekday: 'short', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-    });
-}
-
-function updateConnectionStatus(connected) {
-    const status = document.getElementById('tracking-status');
-    if (!status) return;
-    const dot = status.querySelector('.status-dot');
-    const text = status.querySelector('.status-text');
-    if (connected) {
-        status.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-        status.style.background = 'rgba(16, 185, 129, 0.1)';
-        if (dot) dot.style.background = '#10b981';
-        if (text) { text.textContent = 'Tracking Active'; text.style.color = '#10b981'; }
-    } else {
-        status.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-        status.style.background = 'rgba(239, 68, 68, 0.1)';
-        if (dot) dot.style.background = '#ef4444';
-        if (text) { text.textContent = 'Disconnected'; text.style.color = '#ef4444'; }
-    }
+    const current = parseInt(el.textContent, 10) || 0;
+    if (current === value) return;
+    el.textContent = value.toLocaleString();
 }
 
 function injectGaugeGradient() {
-    const svg = document.querySelector('.gauge-ring');
-    if (!svg) return;
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-    gradient.setAttribute('id', 'gauge-gradient');
-    gradient.setAttribute('x1', '0%'); gradient.setAttribute('y1', '0%');
-    gradient.setAttribute('x2', '100%'); gradient.setAttribute('y2', '100%');
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%'); stop1.setAttribute('stop-color', '#3b82f6');
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%'); stop2.setAttribute('stop-color', '#8b5cf6');
-    gradient.appendChild(stop1); gradient.appendChild(stop2);
-    defs.appendChild(gradient);
-    svg.insertBefore(defs, svg.firstChild);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'gauge-gradient-svg';
+    svg.innerHTML = '<defs><linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ef4444"/><stop offset="50%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#10b981"/></linearGradient></defs>';
+    document.body.appendChild(svg);
 }
