@@ -128,44 +128,6 @@ class IntervalAggregator:
 
         timestamp = datetime.now()
 
-    def _check_day_change(self):
-        """
-        Detect midnight rollover and reset daily counters.
-        
-        Saves yesterday's summary and resets all in-memory state
-        so the dashboard starts fresh for the new day.
-        """
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today == self._current_date:
-            return
-
-        logger.info(
-            f"🌅 Day changed: {self._current_date} → {today}. "
-            f"Resetting daily counters."
-        )
-
-        # Save yesterday's summary before resetting
-        self._save_daily_summary()
-
-        # Reset all daily counters
-        self._current_date = today
-        self._today_productive_seconds = 0.0
-        self._today_total_seconds = 0
-        self._today_idle_seconds = 0
-        self._today_vdi_seconds = 0
-        self._interruptions = 0
-        self._last_was_productive = False
-        self._current_state = "idle"
-        self._current_weight = 0.0
-
-        # Reset behavioral engine for the new day
-        self._behavioral.reset_daily()
-
-        # Reload any data already logged today (in case of late restart)
-        self._load_today_totals()
-
-        logger.info("Daily counters reset for new day")
-
         # 1. Collect input data
         input_data = self._input_tracker.reset_and_get()
 
@@ -237,6 +199,44 @@ class IntervalAggregator:
             f"weight={adjusted_weight:.2f} productive={productive_seconds:.1f}s "
             f"vdi={vdi_active}"
         )
+
+    def _check_day_change(self):
+        """
+        Detect midnight rollover and reset daily counters.
+
+        Saves yesterday's summary and resets all in-memory state
+        so the dashboard starts fresh for the new day.
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today == self._current_date:
+            return
+
+        logger.info(
+            f"🌅 Day changed: {self._current_date} → {today}. "
+            f"Resetting daily counters."
+        )
+
+        # Save yesterday's summary before resetting
+        self._save_daily_summary()
+
+        # Reset all daily counters
+        self._current_date = today
+        self._today_productive_seconds = 0.0
+        self._today_total_seconds = 0
+        self._today_idle_seconds = 0
+        self._today_vdi_seconds = 0
+        self._interruptions = 0
+        self._last_was_productive = False
+        self._current_state = "idle"
+        self._current_weight = 0.0
+
+        # Reset behavioral engine for the new day
+        self._behavioral.reset_daily()
+
+        # Reload any data already logged today (in case of late restart)
+        self._load_today_totals()
+
+        logger.info("Daily counters reset for new day")
 
     def get_status(self) -> dict:
         """Get current real-time status for the dashboard."""
