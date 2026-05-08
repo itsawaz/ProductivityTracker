@@ -96,6 +96,57 @@ body {
 /* ── Dashboard Layout ──────────────────────────────────────────────── */
 .dashboard { max-width: 1440px; margin: 0 auto; padding: 0 24px 60px; }
 
+/* ── Date Navigation ───────────────────────────────────────────────── */
+.date-nav {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 16px 0 8px;
+}
+.date-nav-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--border-color); background: var(--bg-surface);
+    color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition-fast);
+}
+.date-nav-btn:hover { border-color: var(--text-accent); color: var(--text-accent); background: var(--bg-elevated); }
+.date-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.date-nav-center { position: relative; display: flex; align-items: center; }
+.date-picker {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    z-index: 2;
+}
+.date-picker::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.date-display {
+    padding: 8px 24px; border-radius: 100px;
+    background: var(--bg-elevated); border: 1px solid var(--border-color);
+    font-size: 0.9rem; font-weight: 600; color: var(--text-primary);
+    cursor: pointer; user-select: none; text-align: center; min-width: 200px;
+    transition: var(--transition-fast);
+}
+.date-display:hover { border-color: var(--text-accent); }
+.date-display.past { background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: #c4b5fd; }
+.date-today-btn {
+    padding: 8px 16px; border-radius: 100px; border: none;
+    background: var(--gradient-purple); color: white;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    transition: var(--transition-fast); opacity: 0; pointer-events: none;
+}
+.date-today-btn.visible { opacity: 1; pointer-events: all; }
+.date-today-btn:hover { transform: scale(1.05); }
+
+.past-day-banner {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 10px 20px; margin-bottom: 8px;
+    background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: var(--radius-md); font-size: 0.85rem; color: #c4b5fd;
+}
+.banner-back-btn {
+    padding: 4px 12px; border-radius: 100px; border: 1px solid rgba(139, 92, 246, 0.3);
+    background: transparent; color: #c4b5fd; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; transition: var(--transition-fast);
+}
+.banner-back-btn:hover { background: rgba(139, 92, 246, 0.15); }
+
 /* ── Hero Section ──────────────────────────────────────────────────── */
 .hero-section {
     display: flex; justify-content: space-between; align-items: center;

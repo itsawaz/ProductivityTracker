@@ -38,6 +38,27 @@
 
     <main class="dashboard">
 
+        <!-- ═══ Date Navigation ═══ -->
+        <nav class="date-nav" id="date-nav">
+            <button class="date-nav-btn" id="date-prev" title="Previous day">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="date-nav-center">
+                <input type="date" class="date-picker" id="date-picker">
+                <span class="date-display" id="date-display">Today</span>
+            </div>
+            <button class="date-nav-btn" id="date-next" title="Next day">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+            </button>
+            <button class="date-today-btn" id="date-today-btn">Today</button>
+        </nav>
+
+        <!-- ═══ Past Day Banner (hidden by default) ═══ -->
+        <div class="past-day-banner" id="past-day-banner" style="display: none;">
+            <span>📅 Viewing data for <strong id="past-day-label"></strong></span>
+            <button class="banner-back-btn" id="banner-back-btn">← Back to Today</button>
+        </div>
+
         <!-- ═══ Welcome Hero ═══ -->
         <section class="hero-section" id="hero-section">
             <div class="hero-left">

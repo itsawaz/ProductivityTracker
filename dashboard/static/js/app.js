@@ -17,6 +17,18 @@ let lastStatusTimestamp = 0;
 let lastKnownVdiActive = false;
 let lastKnownState = 'idle';
 
+// ── Date Navigation State ─────────────────────────────────────────────
+let selectedDate = getTodayStr();
+
+function getTodayStr() {
+    return new Date().toISOString().split('T')[0];
+}
+
+function isViewingToday() {
+    return selectedDate === getTodayStr();
+}
+
+// ── Socket Events ─────────────────────────────────────────────────────
 socket.on('connect', () => {
     isConnected = true;
     console.log('✅ Connected to ProTrack server');
@@ -27,6 +39,18 @@ socket.on('disconnect', () => {
     isConnected = false;
     console.log('❌ Disconnected from ProTrack server');
     updateConnectionStatus(false);
+});
+
+socket.on('interval_update', (data) => {
+    if (!isViewingToday()) return;
+    if (data.status) updateStatusCards(data.status);
+    if (data.interval) prependTimelineItem(data.interval);
+    fetchAllForDate();
+});
+
+socket.on('status_update', (data) => {
+    if (!isViewingToday()) return;
+    updateStatusCards(data);
 });
 
 // ── Initialize ────────────────────────────────────────────────────────
@@ -40,23 +64,22 @@ document.addEventListener('DOMContentLoaded', () => {
     injectGaugeGradient();
     updateGreeting();
     updateClock();
+    initDateNav();
+
     setInterval(updateClock, 1000);
     setInterval(tickLiveTimer, 1000);
-
-    fetchTodayData();
-    fetchTrendData(7);
-    fetchIntervals();
-    fetchInsights();
-
-    setInterval(() => {
-        fetchTodayData();
-        fetchIntervals();
-        fetchInsights();
-    }, 30000);
-
-    // Update greeting every minute
     setInterval(updateGreeting, 60000);
 
+    // Initial data load
+    fetchAllForDate();
+    fetchTrendData(7);
+
+    // Periodic refresh (only for today)
+    setInterval(() => {
+        if (isViewingToday()) fetchAllForDate();
+    }, 30000);
+
+    // Trend buttons
     document.querySelectorAll('.trend-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
@@ -66,18 +89,160 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// ── Real-Time Events ──────────────────────────────────────────────────
-socket.on('interval_update', (data) => {
-    if (data.status) updateStatusCards(data.status);
-    if (data.interval) prependTimelineItem(data.interval);
-    fetchTodayData();
-    fetchIntervals();
-    fetchInsights();
-});
+// ── Date Navigation ───────────────────────────────────────────────────
+function initDateNav() {
+    const picker = document.getElementById('date-picker');
+    const prevBtn = document.getElementById('date-prev');
+    const nextBtn = document.getElementById('date-next');
+    const todayBtn = document.getElementById('date-today-btn');
+    const bannerBack = document.getElementById('banner-back-btn');
 
-socket.on('status_update', (data) => {
-    updateStatusCards(data);
-});
+    if (picker) {
+        picker.value = selectedDate;
+        picker.max = getTodayStr();
+        picker.addEventListener('change', () => navigateToDate(picker.value));
+    }
+    if (prevBtn) prevBtn.addEventListener('click', () => shiftDate(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => shiftDate(1));
+    if (todayBtn) todayBtn.addEventListener('click', () => navigateToDate(getTodayStr()));
+    if (bannerBack) bannerBack.addEventListener('click', () => navigateToDate(getTodayStr()));
+
+    updateDateDisplay();
+}
+
+function shiftDate(delta) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    const newDate = d.toISOString().split('T')[0];
+    if (newDate > getTodayStr()) return;
+    navigateToDate(newDate);
+}
+
+function navigateToDate(dateStr) {
+    selectedDate = dateStr;
+    const picker = document.getElementById('date-picker');
+    if (picker) picker.value = dateStr;
+    updateDateDisplay();
+    fetchAllForDate();
+}
+
+function updateDateDisplay() {
+    const display = document.getElementById('date-display');
+    const todayBtn = document.getElementById('date-today-btn');
+    const nextBtn = document.getElementById('date-next');
+    const banner = document.getElementById('past-day-banner');
+    const bannerLabel = document.getElementById('past-day-label');
+    const viewing = isViewingToday();
+
+    if (display) {
+        if (viewing) {
+            display.textContent = '📅 Today';
+            display.classList.remove('past');
+        } else {
+            const d = new Date(selectedDate + 'T12:00:00');
+            display.textContent = d.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+            });
+            display.classList.add('past');
+        }
+    }
+    if (todayBtn) todayBtn.classList.toggle('visible', !viewing);
+    if (nextBtn) nextBtn.disabled = viewing;
+    if (banner) banner.style.display = viewing ? 'none' : 'flex';
+    if (bannerLabel && !viewing) {
+        const d = new Date(selectedDate + 'T12:00:00');
+        bannerLabel.textContent = d.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+        });
+    }
+}
+
+// ── Data Fetchers ─────────────────────────────────────────────────────
+function fetchAllForDate() {
+    fetchDaySummary(selectedDate);
+    fetchIntervals(selectedDate);
+    fetchInsights(selectedDate);
+}
+
+async function fetchDaySummary(dateStr) {
+    try {
+        let url;
+        const today = getTodayStr();
+        if (dateStr === today) {
+            url = '/api/today';
+        } else {
+            url = `/api/summary/${dateStr}`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+
+        // For today: use real-time status. For past: build a status-like object
+        if (dateStr === today) {
+            updateStatusCards(data);
+        } else {
+            updateStatusCards({
+                current_state: 'idle',
+                current_weight: 0,
+                vdi_active: false,
+                productive_hours: data.productive_hours,
+                productive_seconds: data.productive_seconds,
+                total_seconds: data.total_seconds,
+                idle_seconds: data.idle_seconds,
+                efficiency: data.efficiency,
+                interruptions: data.interruptions || 0,
+                current_streak: 0,
+                max_streak: 0,
+            });
+        }
+
+        if (data.hourly_breakdown) {
+            updateHourlyChart(data.hourly_breakdown);
+            updateDistributionChart(data.hourly_breakdown);
+        }
+    } catch (e) {
+        console.error('Error fetching day summary:', e);
+    }
+}
+
+async function fetchTrendData(days) {
+    try {
+        const end = getTodayStr();
+        const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+        const res = await fetch(`/api/daily?start=${start}&end=${end}`);
+        const data = await res.json();
+        if (data.summaries) updateTrendChart(data.summaries);
+    } catch (e) {
+        console.error('Error fetching trend data:', e);
+    }
+}
+
+async function fetchIntervals(dateStr) {
+    try {
+        const d = dateStr || selectedDate;
+        const res = await fetch(`/api/intervals?date=${d}&limit=50`);
+        const data = await res.json();
+        if (data.intervals) updateTimeline(data.intervals);
+    } catch (e) {
+        console.error('Error fetching intervals:', e);
+    }
+}
+
+async function fetchInsights(dateStr) {
+    try {
+        const d = dateStr || selectedDate;
+        const res = await fetch(`/api/insights/${d}`);
+        const data = await res.json();
+        updateInsightCards(data);
+        if (data.vdi_stats && data.vdi_stats.hourly_vdi) {
+            updateVdiComparisonChart(data.vdi_stats.hourly_vdi);
+        }
+        if (data.input_totals && data.input_totals.hourly_input) {
+            updateInputHeatmap(data.input_totals.hourly_input);
+        }
+    } catch (e) {
+        console.error('Error fetching insights:', e);
+    }
+}
 
 // ── Greeting & Motivation ─────────────────────────────────────────────
 function updateGreeting() {
@@ -105,78 +270,23 @@ function getGoalMessage(pct) {
     return "Let's crush your 5-hour goal today 🔥";
 }
 
-// ── Data Fetchers ─────────────────────────────────────────────────────
-async function fetchTodayData() {
-    try {
-        const res = await fetch('/api/today');
-        const data = await res.json();
-
-        updateStatusCards(data);
-        if (data.hourly_breakdown) {
-            updateHourlyChart(data.hourly_breakdown);
-            updateDistributionChart(data.hourly_breakdown);
-        }
-    } catch (e) {
-        console.error('Error fetching today data:', e);
-    }
-}
-
-async function fetchTrendData(days) {
-    try {
-        const end = new Date().toISOString().split('T')[0];
-        const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-        const res = await fetch(`/api/daily?start=${start}&end=${end}`);
-        const data = await res.json();
-        if (data.summaries) updateTrendChart(data.summaries);
-    } catch (e) {
-        console.error('Error fetching trend data:', e);
-    }
-}
-
-async function fetchIntervals() {
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const res = await fetch(`/api/intervals?date=${today}&limit=50`);
-        const data = await res.json();
-        if (data.intervals) updateTimeline(data.intervals);
-    } catch (e) {
-        console.error('Error fetching intervals:', e);
-    }
-}
-
-async function fetchInsights() {
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const res = await fetch(`/api/insights/${today}`);
-        const data = await res.json();
-        updateInsightCards(data);
-        if (data.vdi_stats && data.vdi_stats.hourly_vdi) {
-            updateVdiComparisonChart(data.vdi_stats.hourly_vdi);
-        }
-        if (data.input_totals && data.input_totals.hourly_input) {
-            updateInputHeatmap(data.input_totals.hourly_input);
-        }
-    } catch (e) {
-        console.error('Error fetching insights:', e);
-    }
-}
-
 // ── UI Updaters ───────────────────────────────────────────────────────
-
 function updateStatusCards(status) {
-    // Track for live timer
-    if (status.total_seconds !== undefined) {
-        lastKnownTotalSeconds = status.total_seconds;
-        lastStatusTimestamp = Date.now();
-    }
-    if (status.productive_seconds !== undefined) {
-        lastKnownProductiveSeconds = status.productive_seconds;
-    }
-    if (status.vdi_active !== undefined) {
-        lastKnownVdiActive = status.vdi_active;
-    }
-    if (status.current_state) {
-        lastKnownState = status.current_state;
+    // Track for live timer (only when viewing today)
+    if (isViewingToday()) {
+        if (status.total_seconds !== undefined) {
+            lastKnownTotalSeconds = status.total_seconds;
+            lastStatusTimestamp = Date.now();
+        }
+        if (status.productive_seconds !== undefined) {
+            lastKnownProductiveSeconds = status.productive_seconds;
+        }
+        if (status.vdi_active !== undefined) {
+            lastKnownVdiActive = status.vdi_active;
+        }
+        if (status.current_state) {
+            lastKnownState = status.current_state;
+        }
     }
 
     // Current State
@@ -210,17 +320,11 @@ function updateStatusCards(status) {
         if (totalEl) totalEl.textContent = formatDuration(status.total_seconds);
     }
 
-    // Hidden elements (backward compat)
+    // Hidden elements
     const prodEl = document.getElementById('productive-hours');
     if (prodEl && status.productive_hours) prodEl.textContent = status.productive_hours;
-    const vdiStatus = document.getElementById('vdi-status');
-    if (vdiStatus) vdiStatus.textContent = status.vdi_active ? '✅ Active' : '⚪ Inactive';
     const effPct = document.getElementById('efficiency-pct');
     if (effPct && status.efficiency !== undefined) effPct.textContent = `${Math.round(status.efficiency)}%`;
-    const rollEl = document.getElementById('rolling-score');
-    if (rollEl && status.rolling_score !== undefined) rollEl.textContent = status.rolling_score.toFixed(2);
-    const maxStreak = document.getElementById('max-streak');
-    if (maxStreak && status.max_streak !== undefined) maxStreak.textContent = status.max_streak;
 
     // Update the 5-hour goal ring
     updateGoalRing(status.productive_seconds || lastKnownProductiveSeconds);
@@ -228,24 +332,20 @@ function updateStatusCards(status) {
 
 function updateGoalRing(productiveSeconds) {
     const pct = Math.min((productiveSeconds / DAILY_GOAL_SECONDS) * 100, 100);
-    const circumference = 2 * Math.PI * 85; // r=85
+    const circumference = 2 * Math.PI * 85;
 
-    // Ring fill
     const ring = document.getElementById('goal-ring-fill');
     if (ring) {
         const offset = circumference - (pct / 100) * circumference;
         ring.style.strokeDashoffset = offset;
     }
 
-    // Time display
     const timeEl = document.getElementById('goal-time');
     if (timeEl) timeEl.textContent = formatDuration(productiveSeconds);
 
-    // Hidden element
     const ttEl = document.getElementById('insight-total-time-val');
     if (ttEl) ttEl.textContent = formatDuration(productiveSeconds);
 
-    // Percentage badge
     const badge = document.getElementById('goal-pct-badge');
     if (badge) {
         badge.textContent = `${Math.round(pct)}%`;
@@ -254,16 +354,20 @@ function updateGoalRing(productiveSeconds) {
         else if (pct >= 60) badge.classList.add('hot');
     }
 
-    // Motivational status
     const statusEl = document.getElementById('goal-status');
     if (statusEl) statusEl.textContent = getGoalMessage(pct);
 
-    // Update motto
     const mottoEl = document.getElementById('hero-motto');
     if (mottoEl) {
-        if (pct >= 100) mottoEl.textContent = "5-hour goal achieved! You're a legend 👑";
-        else if (pct >= 60) mottoEl.textContent = "You're on fire — don't stop now 🔥";
-        else mottoEl.textContent = getGoalMessage(pct);
+        if (!isViewingToday()) {
+            mottoEl.textContent = `Reviewing your past performance 📊`;
+        } else if (pct >= 100) {
+            mottoEl.textContent = "5-hour goal achieved! You're a legend 👑";
+        } else if (pct >= 60) {
+            mottoEl.textContent = "You're on fire — don't stop now 🔥";
+        } else {
+            mottoEl.textContent = getGoalMessage(pct);
+        }
     }
 }
 
@@ -362,7 +466,7 @@ function updateTimeline(intervals) {
     if (!body) return;
 
     if (!intervals || intervals.length === 0) {
-        body.innerHTML = '<div class="timeline-empty"><span class="empty-icon">📡</span><p>Waiting for data...</p><p class="empty-sub">Intervals appear every 30 seconds</p></div>';
+        body.innerHTML = '<div class="timeline-empty"><span class="empty-icon">📡</span><p>No data for this day</p><p class="empty-sub">Intervals appear every 30 seconds when tracking</p></div>';
         if (countEl) countEl.textContent = '0 intervals';
         return;
     }
@@ -396,11 +500,11 @@ function createTimelineHTML(iv) {
             <span class="timeline-time">${time}</span>
             <span class="timeline-state ${state}">${formatState(state)}</span>
             <div class="timeline-events">
-                <span title="VDI Status">${vdiIcon}</span>
-                <span title="Keystrokes">⌨️${iv.key_count || 0}</span>
+                <span title="VDI">${vdiIcon}</span>
+                <span title="Keys">⌨️${iv.key_count || 0}</span>
                 <span title="Clicks">🖱️${iv.mouse_click_count || 0}</span>
                 <span title="Scrolls">↕️${iv.scroll_count || 0}</span>
-                <span title="Total Events">Σ${totalEvents}</span>
+                <span title="Total">Σ${totalEvents}</span>
             </div>
             <div class="timeline-bar-wrap">
                 <div class="timeline-bar">
@@ -414,6 +518,8 @@ function createTimelineHTML(iv) {
 
 // ── Live Timer ────────────────────────────────────────────────────────
 function tickLiveTimer() {
+    // Only tick when viewing today
+    if (!isViewingToday()) return;
     if (lastKnownTotalSeconds <= 0 || lastStatusTimestamp <= 0) return;
 
     if (!lastKnownVdiActive) {
@@ -425,7 +531,6 @@ function tickLiveTimer() {
     const elapsed = Math.floor((Date.now() - lastStatusTimestamp) / 1000);
     const currentTotal = lastKnownTotalSeconds + elapsed;
 
-    // Only extrapolate productive time when actually in a productive state
     const isProductive = (lastKnownState === 'active' || lastKnownState === 'high_focus');
     const currentProductive = isProductive
         ? lastKnownProductiveSeconds + elapsed
@@ -439,7 +544,6 @@ function tickLiveTimer() {
         totalEl.textContent = `${hrs}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
     }
 
-    // Live goal ring update
     updateGoalRing(currentProductive);
 }
 
@@ -467,9 +571,7 @@ function formatDurationShort(seconds) {
 function setAnimatedValue(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
-    const current = parseInt(el.textContent, 10) || 0;
-    if (current === value) return;
-    el.textContent = value.toLocaleString();
+    el.textContent = (value || 0).toLocaleString();
 }
 
 function injectGaugeGradient() {

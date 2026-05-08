@@ -80,6 +80,56 @@ def register_routes(app):
             "hourly_breakdown": hourly,
         })
 
+    @app.route("/api/summary/<date_str>")
+    def api_summary(date_str):
+        """Get full summary for a specific date (works for past days too)."""
+        if _repository is None:
+            return jsonify({"error": "Repository not initialized"}), 503
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        is_today = (date_str == today)
+
+        try:
+            # Get totals from DB
+            totals = _repository.get_today_totals(date_str)
+            hourly = _repository.get_hourly_breakdown(date_str)
+
+            productive_secs = totals["productive_seconds"]
+            total_secs = totals["total_seconds"]
+            idle_secs = totals["idle_seconds"]
+
+            # For today, use live in-memory values if aggregator is running
+            if is_today and _aggregator:
+                status = _aggregator.get_status()
+                productive_secs = status["productive_seconds"]
+                total_secs = status["total_seconds"]
+                idle_secs = status["idle_seconds"]
+
+            # Calculate VDI seconds from intervals
+            vdi_secs = 0
+            for h, info in hourly.items():
+                # Estimate VDI seconds from intervals that were VDI-active
+                pass  # Will use insights for VDI data
+
+            efficiency = (productive_secs / total_secs * 100) if total_secs > 0 else 0
+            prod_hrs = int(productive_secs // 3600)
+            prod_mins = int((productive_secs % 3600) // 60)
+
+            return jsonify({
+                "date": date_str,
+                "is_today": is_today,
+                "productive_seconds": round(productive_secs, 1),
+                "productive_hours": f"{prod_hrs}h {prod_mins:02d}m",
+                "total_seconds": total_secs,
+                "idle_seconds": idle_secs,
+                "efficiency": round(efficiency, 1),
+                "interval_count": totals["interval_count"],
+                "hourly_breakdown": hourly,
+            })
+        except Exception as e:
+            logger.error(f"Error in /api/summary: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/hourly/<date_str>")
     def api_hourly(date_str):
         """Get hourly breakdown for a specific date."""
