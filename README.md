@@ -83,7 +83,10 @@ For keyboard/mouse tracking to work on macOS, you must grant Accessibility permi
 ```bash
 python main.py
 ```
-
+or 
+```bash
+ ./start.sh
+```
 The dashboard will automatically open at **http://localhost:8080**
 
 ---
