@@ -307,16 +307,16 @@ class IntervalAggregator:
     def _save_daily_summary(self):
         """Save/update today's daily summary."""
         try:
-            today = datetime.now().strftime("%Y-%m-%d")
+            date_to_save = self._current_date
             efficiency = self._scoring_engine.calculate_efficiency(
                 self._today_productive_seconds, self._today_total_seconds
             )
 
             # Get hourly breakdown from DB
-            hourly = self._repository.get_hourly_breakdown(today)
+            hourly = self._repository.get_hourly_breakdown(date_to_save)
 
             summary = {
-                "date": today,
+                "date": date_to_save,
                 "total_logged_seconds": self._today_total_seconds,
                 "productive_seconds": self._today_productive_seconds,
                 "idle_seconds": self._today_idle_seconds,
@@ -326,6 +326,6 @@ class IntervalAggregator:
                 "hourly_breakdown": hourly,
             }
             self._repository.save_daily_summary(summary)
-            logger.info(f"Daily summary saved for {today}")
+            logger.info(f"Daily summary saved for {date_to_save}")
         except Exception as e:
             logger.error(f"Failed to save daily summary: {e}")

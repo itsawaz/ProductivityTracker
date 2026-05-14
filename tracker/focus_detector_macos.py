@@ -29,7 +29,7 @@ class MacOSFocusDetector(BaseFocusDetector):
     def __init__(self):
         # Lazy import — only on macOS
         try:
-            from AppKit import NSWorkspace
+            from AppKit import NSWorkspace  # type: ignore
             self._NSWorkspace = NSWorkspace
             logger.info("MacOSFocusDetector initialized successfully")
         except ImportError:
@@ -40,7 +40,7 @@ class MacOSFocusDetector(BaseFocusDetector):
 
         # Try to import Quartz for window-level detection
         try:
-            import Quartz
+            import Quartz  # type: ignore
             self._Quartz = Quartz
             self._has_quartz = True
             logger.info("Quartz available — using window-level VDI detection")
@@ -81,6 +81,24 @@ class MacOSFocusDetector(BaseFocusDetector):
 
     def _is_vdi_frontmost(self) -> bool:
         """Check if a VDI client is the frontmost macOS application."""
+        if self._has_quartz:
+            window_list = self._Quartz.CGWindowListCopyWindowInfo(
+                self._Quartz.kCGWindowListOptionOnScreenOnly
+                | self._Quartz.kCGWindowListExcludeDesktopElements,
+                self._Quartz.kCGNullWindowID,
+            )
+            if window_list:
+                from AppKit import NSRunningApplication  # type: ignore
+                for window in window_list:
+                    if window.get("kCGWindowLayer", 0) == 0:
+                        owner_pid = window.get("kCGWindowOwnerPID", -1)
+                        if owner_pid > 0:
+                            app = NSRunningApplication.runningApplicationWithProcessIdentifier_(owner_pid)
+                            if app and app.bundleIdentifier() in self._vdi_bundle_ids:
+                                return True
+                        return False
+
+        # Fallback if Quartz is unavailable
         app = self._NSWorkspace.sharedWorkspace().frontmostApplication()
         if app is None:
             return False
@@ -94,32 +112,11 @@ class MacOSFocusDetector(BaseFocusDetector):
         Check if any VDI client has visible windows on screen.
         
         Uses Quartz CGWindowListCopyWindowInfo to enumerate all on-screen
-        windows. This correctly handles:
-            - App running but no windows open → False
-            - App running with windows on other monitor → True
-            - App hidden/minimized → False
-            - App quit → False
-        
-        Falls back to frontmost check if Quartz is not available.
+        windows dynamically, bypassing NSWorkspace caching issues.
         """
         if not self._has_quartz:
             return self._is_vdi_frontmost()
 
-        # Get the PIDs of running VDI apps
-        workspace = self._NSWorkspace.sharedWorkspace()
-        running_apps = workspace.runningApplications()
-        
-        vdi_pids = set()
-        for app in running_apps:
-            bundle_id = app.bundleIdentifier()
-            if bundle_id and bundle_id in self._vdi_bundle_ids:
-                if not app.isTerminated():
-                    vdi_pids.add(app.processIdentifier())
-
-        if not vdi_pids:
-            return False
-
-        # Check if any of those PIDs have visible on-screen windows
         window_list = self._Quartz.CGWindowListCopyWindowInfo(
             self._Quartz.kCGWindowListOptionOnScreenOnly
             | self._Quartz.kCGWindowListExcludeDesktopElements,
@@ -129,19 +126,42 @@ class MacOSFocusDetector(BaseFocusDetector):
         if window_list is None:
             return False
 
+        from AppKit import NSRunningApplication  # type: ignore
+        vdi_pids_cache = {}
+
         for window in window_list:
-            owner_pid = window.get("kCGWindowOwnerPID", -1)
-            if owner_pid in vdi_pids:
-                # Check that it's a real window (not a menu bar item etc.)
-                layer = window.get("kCGWindowLayer", 0)
-                # Layer 0 = normal windows, >0 = system elements
-                if layer == 0:
-                    return True
+            if window.get("kCGWindowLayer", 0) == 0:
+                owner_pid = window.get("kCGWindowOwnerPID", -1)
+                if owner_pid > 0:
+                    if owner_pid in vdi_pids_cache:
+                        if vdi_pids_cache[owner_pid]:
+                            return True
+                        continue
+
+                    app = NSRunningApplication.runningApplicationWithProcessIdentifier_(owner_pid)
+                    if app and app.bundleIdentifier() in self._vdi_bundle_ids:
+                        vdi_pids_cache[owner_pid] = True
+                        return True
+                    else:
+                        vdi_pids_cache[owner_pid] = False
 
         return False
 
     def get_active_app_name(self) -> str:
         """Get the name of the frontmost macOS application."""
+        if self._has_quartz:
+            window_list = self._Quartz.CGWindowListCopyWindowInfo(
+                self._Quartz.kCGWindowListOptionOnScreenOnly
+                | self._Quartz.kCGWindowListExcludeDesktopElements,
+                self._Quartz.kCGNullWindowID,
+            )
+            if window_list:
+                for window in window_list:
+                    if window.get("kCGWindowLayer", 0) == 0:
+                        owner_name = window.get("kCGWindowOwnerName")
+                        if owner_name:
+                            return owner_name
+
         try:
             app = self._NSWorkspace.sharedWorkspace().frontmostApplication()
             if app is not None:
